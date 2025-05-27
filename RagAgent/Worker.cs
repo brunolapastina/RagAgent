@@ -2,7 +2,7 @@ using System.Text;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 
-namespace RagChatBot;
+namespace RagAgent;
 
 public class Worker(ILogger<Worker> logger, IHostApplicationLifetime appLifetime, Kernel kernel, IChatCompletionService chatCompletion) : BackgroundService
 {
@@ -16,7 +16,7 @@ public class Worker(ILogger<Worker> logger, IHostApplicationLifetime appLifetime
       //FunctionChoiceBehavior = FunctionChoiceBehavior.Auto(null, true),
    };
 
-   private ChatHistory _chat = new();
+   private readonly ChatHistory _chat = new();
 
    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
    {
