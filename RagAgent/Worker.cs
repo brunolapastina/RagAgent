@@ -4,9 +4,9 @@ using Microsoft.SemanticKernel.ChatCompletion;
 
 namespace RagAgent;
 
-public class Worker(ILogger<Worker> logger, IHostApplicationLifetime appLifetime, Kernel kernel, IChatCompletionService chatCompletion) : BackgroundService
+public class ChatWorker(ILogger<ChatWorker> logger, IHostApplicationLifetime appLifetime, Kernel kernel, IChatCompletionService chatCompletion) : BackgroundService
 {
-   private readonly ILogger<Worker> _logger = logger;
+   private readonly ILogger<ChatWorker> _logger = logger;
    private readonly IHostApplicationLifetime _appLifetime = appLifetime;
    private readonly Kernel _kernel = kernel;
    private readonly IChatCompletionService _chatCompletion = chatCompletion;

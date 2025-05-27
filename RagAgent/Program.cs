@@ -17,7 +17,7 @@ public class Program
    {
       var builder = Host.CreateApplicationBuilder(args);
       builder.Configuration.AddUserSecrets<Program>();
-      builder.Services.AddHostedService<Worker>();
+      builder.Services.AddHostedService<ChatWorker>();
       builder.Services.AddInMemoryVectorStore();
 
       var embeddingConfig = builder.Configuration.GetSection("EmbeddingService").Get<ModelConfig>() ??
