@@ -1,4 +1,5 @@
 using Microsoft.SemanticKernel;
+using Serilog;
 
 #pragma warning disable SKEXP0070, SKEXP0001, SKEXP0050 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
@@ -15,25 +16,44 @@ public class Program
 
    public static void Main(string[] args)
    {
-      var builder = Host.CreateApplicationBuilder(args);
-      builder.Configuration.AddUserSecrets<Program>();
-      builder.Services.AddSingleton<DataLoader>();
-      builder.Services.AddHostedService<ChatWorker>();
-      builder.Services.AddInMemoryVectorStore();
+      var configuration = new ConfigurationBuilder()
+         .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+         .Build();
 
-      Console.WriteLine($"Current Path: {Environment.CurrentDirectory}");
+      Log.Logger = new LoggerConfiguration()
+         .ReadFrom.Configuration(configuration)
+         .CreateLogger();
 
-      var embeddingConfig = builder.Configuration.GetSection("EmbeddingService").Get<ModelConfig>() ??
-         throw new InvalidOperationException("EmbeddingGenerator configuration is missing.");
+      try
+      {
+         Log.Information("Starting RagAgent application...");
 
-      var chatConfig = builder.Configuration.GetSection("ChatService").Get<ModelConfig>() ??
-         throw new InvalidOperationException("EmbeddingGenerator configuration is missing.");
+         var builder = Host.CreateApplicationBuilder(args);
+         builder.Services.AddSerilog(Log.Logger);
+         builder.Services.AddSingleton<DataLoader>();
+         builder.Services.AddHostedService<ChatWorker>();
+         builder.Services.AddInMemoryVectorStore();
 
-      builder.Services.AddKernel()
-         .AddOllamaEmbeddingGenerator(embeddingConfig.ModelId, embeddingConfig.EndpointUri)
-         .AddOllamaChatCompletion(chatConfig.ModelId, embeddingConfig.EndpointUri);
+         var embeddingConfig = builder.Configuration.GetSection("EmbeddingService").Get<ModelConfig>() ??
+            throw new InvalidOperationException("EmbeddingGenerator configuration is missing.");
 
-      var host = builder.Build();
-      host.Run();
+         var chatConfig = builder.Configuration.GetSection("ChatService").Get<ModelConfig>() ??
+            throw new InvalidOperationException("EmbeddingGenerator configuration is missing.");
+
+         builder.Services.AddKernel()
+            .AddOllamaEmbeddingGenerator(embeddingConfig.ModelId, embeddingConfig.EndpointUri)
+            .AddOllamaChatCompletion(chatConfig.ModelId, embeddingConfig.EndpointUri);
+
+         var host = builder.Build();
+         host.Run();
+      }
+      catch(Exception ex)
+      {
+         Log.Fatal(ex, "An unhandled exception occurred during application startup.");
+      }
+      finally
+      {
+         Log.CloseAndFlush();
+      }
    }
 }
