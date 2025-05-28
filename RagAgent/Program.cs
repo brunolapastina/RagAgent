@@ -17,8 +17,11 @@ public class Program
    {
       var builder = Host.CreateApplicationBuilder(args);
       builder.Configuration.AddUserSecrets<Program>();
+      builder.Services.AddSingleton<DataLoader>();
       builder.Services.AddHostedService<ChatWorker>();
       builder.Services.AddInMemoryVectorStore();
+
+      Console.WriteLine($"Current Path: {Environment.CurrentDirectory}");
 
       var embeddingConfig = builder.Configuration.GetSection("EmbeddingService").Get<ModelConfig>() ??
          throw new InvalidOperationException("EmbeddingGenerator configuration is missing.");
