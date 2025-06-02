@@ -10,6 +10,6 @@ public sealed class VectorStoreEntry
    [VectorStoreData]
    public required string Content { get; set; }
 
-   [VectorStoreVector(1536)]
+   [VectorStoreVector(768, DistanceFunction = DistanceFunction.CosineDistance)]
    public required ReadOnlyMemory<float> Embedding { get; set; }
 }
