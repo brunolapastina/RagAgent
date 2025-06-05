@@ -35,7 +35,14 @@ public class ChatWorker(
       var textSearch = new VectorStoreTextSearch<VectorStoreEntry>(collection, _embeddingGenerator);
 
       // Build a text search plugin with vector store search and add to the kernel
-      var searchPlugin = textSearch.CreateWithGetTextSearchResults("SearchPlugin");
+      //var searchPlugin = textSearch.CreateWithGetTextSearchResults("SearchPlugin");
+      var searchOptions = new TextSearchOptions()
+      {
+         Top = 5,
+         Skip = 0,
+      };
+      var searchPlugin = KernelPluginFactory.CreateFromFunctions("SearchPlugin", "Performs search on the provided documents", [textSearch.CreateGetTextSearchResults(null, searchOptions)]);
+
       _kernel.Plugins.Add(searchPlugin);
 
       var handlebarsPromptYaml = File.ReadAllText("Resources/Prompt.yaml");
