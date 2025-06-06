@@ -14,16 +14,10 @@ public class ChatWorker(
    ILogger<ChatWorker> _logger,
    IHostApplicationLifetime _appLifetime,
    Kernel _kernel,
-   IChatCompletionService _chatCompletion,
    IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator,
    DataLoader _dataLoader) : BackgroundService
 {
-   private readonly PromptExecutionSettings _promptExecSettings = new()
-   {
-      //FunctionChoiceBehavior = FunctionChoiceBehavior.Auto(null, true),
-   };
-
-   private readonly ChatHistory _chat = new();
+   private readonly ChatHistory _chat = [];
 
    private readonly HandlebarsPromptTemplateFactory _templateFactory = new();
 
@@ -35,7 +29,6 @@ public class ChatWorker(
       var textSearch = new VectorStoreTextSearch<VectorStoreEntry>(collection, _embeddingGenerator);
 
       // Build a text search plugin with vector store search and add to the kernel
-      //var searchPlugin = textSearch.CreateWithGetTextSearchResults("SearchPlugin");
       var searchOptions = new TextSearchOptions()
       {
          Top = 5,
@@ -45,39 +38,46 @@ public class ChatWorker(
 
       _kernel.Plugins.Add(searchPlugin);
 
-      var handlebarsPromptYaml = File.ReadAllText("Resources/Prompt.yaml");
+      var handlebarsPromptYaml = await File.ReadAllTextAsync("Resources/Prompt.yaml", stoppingToken);
       var function = _kernel.CreateFunctionFromPromptYaml(handlebarsPromptYaml, _templateFactory);
 
       var arguments = new KernelArguments()
       {
-         { "history", _chat },
+         { "history", _chat.TakeLast(5) },
       };
 
       StringBuilder stringBuilder = new();
 
       while (!stoppingToken.IsCancellationRequested)
       {
-         var input = Console.ReadLine();
-         if (string.IsNullOrEmpty(input))
+         try
          {
-            _logger.LogInformation("Terminating worker due to empty input.");
+            var input = Console.ReadLine();
+            if (string.IsNullOrEmpty(input))
+            {
+               _logger.LogInformation("Terminating worker due to empty input.");
 
-            break;
+               break;
+            }
+
+            _chat.AddUserMessage(input);
+            arguments["CurrentQuestion"] = input;
+
+            stringBuilder.Clear();
+            var response = _kernel.InvokeStreamingAsync(function, arguments, stoppingToken);
+            await foreach (var message in response)
+            {
+               Console.Write(message);
+               stringBuilder.Append(message);
+            }
+            Console.WriteLine();
+            _chat.AddAssistantMessage(stringBuilder.ToString());
+            Console.WriteLine();
          }
-
-         _chat.AddUserMessage(input);
-         arguments["CurrentQuestion"] = input;
-
-         stringBuilder.Clear();
-         var response = _kernel.InvokeStreamingAsync(function, arguments, stoppingToken);
-         await foreach (var message in response)
+         catch (Exception ex)
          {
-            Console.Write(message);
-            stringBuilder.Append(message);
+            _logger.LogError(ex, "An error occurred while processing input. Please try again.");
          }
-         Console.WriteLine();
-         _chat.AddAssistantMessage(stringBuilder.ToString());
-         Console.WriteLine();
       }
 
       _appLifetime.StopApplication();
