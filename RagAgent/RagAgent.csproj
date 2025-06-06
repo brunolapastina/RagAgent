@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="drittich.SemanticSlicer" Version="1.4.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="9.5.0" />
     <PackageReference Include="Microsoft.SemanticKernel" Version="1.54.0" />
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.InMemory" Version="1.54.0-preview" />
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.Ollama" Version="1.54.0-alpha" />
