@@ -1,4 +1,3 @@
-using System;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Data;
@@ -19,11 +18,18 @@ public static class VectorStoreSearcherExtensions
    /// <param name="textSearch">The instance of ITextSearch to be used by the plugin.</param>
    /// <param name="pluginName">The name for the plugin.</param>
    /// <param name="description">A description of the plugin.</param>
-   /// <returns>A <see cref="KernelPlugin"/> instance with a GetTextSearchResults operation that calls the provided <see cref="ITextSearch.GetTextSearchResultsAsync(string, TextSearchOptions?, CancellationToken)"/>.</returns>
+   /// <param name="options">Optional KernelFunctionFromMethodOptions which allow the KernelFunction metadata to be specified.</param>
+   /// <param name="searchOptions">Optional TextSearchOptions which override the options provided when the function is invoked.</param>
+   /// <returns>A <see cref="KernelPlugin"/> instance with a GetTextSearchResults operation that calls the provided <see cref="VectorStoreSearcher.GetTextSearchResultsAsync(string, TextSearchOptions?, CancellationToken)"/>.</returns>
    [RequiresUnreferencedCode("Uses reflection to handle various aspects of the function creation and invocation, making it incompatible with AOT scenarios.")]
    [RequiresDynamicCode("Uses reflection to handle various aspects of the function creation and invocation, making it incompatible with AOT scenarios.")]
-   public static KernelPlugin CreateWithGetSearchResults<TRecord>(this VectorStoreSearcher<TRecord> searcher, string pluginName, string? description = null) =>
-      KernelPluginFactory.CreateFromFunctions(pluginName, description, [searcher.CreateGetSearchResults()]);
+   public static KernelPlugin CreateWithGetSearchResults<TRecord>(
+         this VectorStoreSearcher<TRecord> searcher,
+         string pluginName,
+         string? description = null,
+         KernelFunctionFromMethodOptions? options = null,
+         SearchOptions? searchOptions = null) =>
+      KernelPluginFactory.CreateFromFunctions(pluginName, description, [searcher.CreateGetSearchResults(options, searchOptions)]);
 
    /// <summary>
    /// Create a <see cref="KernelFunction"/> which invokes <see cref="ITextSearch.GetTextSearchResultsAsync(string, TextSearchOptions?, CancellationToken)"/>.
@@ -31,12 +37,13 @@ public static class VectorStoreSearcherExtensions
    /// <param name="textSearch">The ITextSearch instance to use.</param>
    /// <param name="options">Optional KernelFunctionFromMethodOptions which allow the KernelFunction metadata to be specified.</param>
    /// <param name="searchOptions">Optional TextSearchOptions which override the options provided when the function is invoked.</param>
-   /// <returns>A <see cref="KernelFunction"/> instance with a Search operation that calls the provided <see cref="ITextSearch.GetTextSearchResultsAsync(string, SearchOptions?, CancellationToken)"/>.</returns>
+   /// <returns>A <see cref="KernelFunction"/> instance with a Search operation that calls the provided <see cref="VectorStoreSearcher.GetTextSearchResultsAsync(string, SearchOptions?, CancellationToken)"/>.</returns>
    [RequiresUnreferencedCode("Uses reflection to handle various aspects of the function creation and invocation, making it incompatible with AOT scenarios.")]
    [RequiresDynamicCode("Uses reflection to handle various aspects of the function creation and invocation, making it incompatible with AOT scenarios.")]
    public static KernelFunction CreateGetSearchResults<TRecord>(this VectorStoreSearcher<TRecord> searcher, KernelFunctionFromMethodOptions? options = null, SearchOptions? searchOptions = null)
    {
-      async Task<IEnumerable<SearchResult>> GetTextSearchResultAsync(Kernel kernel, KernelFunction function, KernelArguments arguments, CancellationToken cancellationToken, int count = 2, int skip = 0)
+      [SuppressMessage("Style", "IDE0060:Remove unused parameter", Justification = "Required by delegate signature")]
+      async Task<IEnumerable<SearchResult>> GetTextSearchResultAsync( Kernel kernel, KernelFunction function, KernelArguments arguments, CancellationToken cancellationToken, int count = 2, int skip = 0)
       {
          arguments.TryGetValue("query", out var query);
          if (string.IsNullOrEmpty(query?.ToString()))
@@ -54,7 +61,6 @@ public static class VectorStoreSearcherExtensions
          var result = await searcher.GetTextSearchResultsAsync(query?.ToString()!, searchOptions, cancellationToken).ConfigureAwait(false);
 
          var resultList = new List<SearchResult>();
-
          await foreach (var item in result.Results.WithCancellation(cancellationToken).ConfigureAwait(false))
          {
             resultList.Add(item);
@@ -67,37 +73,6 @@ public static class VectorStoreSearcherExtensions
       return KernelFunctionFactory.CreateFromMethod(
               GetTextSearchResultAsync,
               options);
-   }
-
-   /// <summary>
-   /// Create a <see cref="TextSearchFilter" /> for the search based on any additional parameters included in the <see cref="KernelFunctionFromMethodOptions"/>
-   /// </summary>
-   /// <param name="options">Kernel function method options.</param>
-   /// <param name="arguments">Kernel arguments.</param>
-   private static TextSearchFilter? CreateBasicFilter(KernelFunctionFromMethodOptions? options, KernelArguments arguments)
-   {
-      if (options?.Parameters is null)
-      {
-         return null;
-      }
-
-      TextSearchFilter? filter = null;
-      foreach (var parameter in options.Parameters)
-      {
-         // treat non standard parameters as equality filter clauses
-         if (!parameter.Name.Equals("query", StringComparison.Ordinal) &&
-             !parameter.Name.Equals("count", StringComparison.Ordinal) &&
-             !parameter.Name.Equals("skip", StringComparison.Ordinal))
-         {
-            if (arguments.TryGetValue(parameter.Name, out var value) && value is not null)
-            {
-               filter ??= new TextSearchFilter();
-               filter.Equality(parameter.Name, value);
-            }
-         }
-      }
-
-      return filter;
    }
 
    /// <summary>

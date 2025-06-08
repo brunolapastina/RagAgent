@@ -27,7 +27,6 @@ public class ChatWorker(
 
       // Create a text search instance using the vector store collection.
       var textSearch = new VectorStoreSearcher<VectorStoreEntry>(collection, _embeddingGenerator, (entry, score) => new SearchResult(entry.Content){ Key = entry.Key.ToString(), Score = score });
-      //var textSearch = new VectorStoreTextSearch<VectorStoreEntry>(collection, _embeddingGenerator);
 
       // Build a text search plugin with vector store search and add to the kernel
       var searchOptions = new SearchOptions()
@@ -36,7 +35,7 @@ public class ChatWorker(
          Skip = 0,
          MinScore = 0.6f
       };
-      var searchPlugin = KernelPluginFactory.CreateFromFunctions("SearchPlugin", "Performs search on the provided documents", [textSearch.CreateGetSearchResults(null, searchOptions)]);
+      var searchPlugin = textSearch.CreateWithGetSearchResults("SearchPlugin", null, null, searchOptions);
 
       _kernel.Plugins.Add(searchPlugin);
 
