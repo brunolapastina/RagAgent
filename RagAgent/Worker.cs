@@ -1,9 +1,7 @@
 using System.Text;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.VectorData;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
-using Microsoft.SemanticKernel.Data;
 using Microsoft.SemanticKernel.PromptTemplates.Handlebars;
 
 #pragma warning disable SKEXP0001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
@@ -26,7 +24,7 @@ public class ChatWorker(
       var collection = await _dataLoader.LoadAsync("Teste", stoppingToken);
 
       // Create a text search instance using the vector store collection.
-      var textSearch = new VectorStoreSearcher<VectorStoreEntry>(collection, _embeddingGenerator, (entry, score) => new SearchResult(entry.Content){ Key = entry.Key.ToString(), Score = score });
+      var textSearch = new VectorStoreSearcher<VectorStoreEntry>(collection, _embeddingGenerator, (entry, score) => new SearchResult(entry.Content) { Key = entry.Key.ToString(), Score = score });
 
       // Build a text search plugin with vector store search and add to the kernel
       var searchOptions = new SearchOptions()
@@ -39,7 +37,7 @@ public class ChatWorker(
 
       _kernel.Plugins.Add(searchPlugin);
 
-      var handlebarsPromptYaml = await File.ReadAllTextAsync("Resources/Prompt.yaml", stoppingToken);
+      var handlebarsPromptYaml = await LoadPromptText();
       var function = _kernel.CreateFunctionFromPromptYaml(handlebarsPromptYaml, _templateFactory);
 
       var arguments = new KernelArguments()
@@ -83,5 +81,19 @@ public class ChatWorker(
 
       _appLifetime.StopApplication();
       _logger.LogInformation("Worker has stopped.");
+   }
+
+   private static async Task<string> LoadPromptText()
+   {
+      using var stream = typeof(ChatWorker).Assembly.GetManifestResourceStream("RagAgent.Resources.Prompt.yaml") ??
+         throw new InvalidOperationException("Prompt YAML resource not found in assembly.");
+
+      using var sR = new StreamReader(stream);
+      var promptText = await sR.ReadToEndAsync();
+      sR.Close();
+
+      stream.Close();
+
+      return promptText;
    }
 }
