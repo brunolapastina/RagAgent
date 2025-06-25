@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 
 namespace SemanticChunker;
 
@@ -23,4 +24,34 @@ public class TextChunkerOptions
    /// Maximum number of tokens allowed in a chunk
    /// </summary>
    public int MaxLength { get; set; }
+
+   public delegate int TokenCounterDelegate(string input);
+
+   /// <summary>
+   /// A function to be used to count the number of tokens in a string
+   /// </summary>
+   public TokenCounterDelegate TokenCounter { get; set; } = DefaultTokenCounter;
+
+   /// <summary>
+   /// A default function to count the number of tokens in a string
+   /// It only devides the length by 4
+   /// </summary>
+   private static int DefaultTokenCounter(string input)
+   {
+      return input.Length >> 2;
+   }
+
+   public enum DistanceFunctions
+   {
+      /// <summary>Computes the cosine similarity between the two embeddings.</summary>
+      CosineSimilarity,
+
+      /// <summary>Computes the distance in Euclidean space.</summary>
+      EuclideanDistance,
+
+      /// <sumary>Computes the dot product of two embeddings</summary>
+      DotProductSimilarity,
+   }
+
+   public DistanceFunctions DistanceFunction { get; set; } = DistanceFunctions.CosineSimilarity;
 }

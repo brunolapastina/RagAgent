@@ -1,6 +1,4 @@
-﻿using System.Net.Http.Headers;
-using System.Numerics.Tensors;
-using System.Threading.Tasks;
+﻿using System.Numerics.Tensors;
 using Microsoft.Extensions.AI;
 
 namespace SemanticChunker;
@@ -27,7 +25,7 @@ public class TextChunker
       bool isInitialMerge = true;
       while (i < sliceEmbeddingPairs.Count - 1)
       {
-         if (CalculateTokens(sliceEmbeddingPairs[i].Value) >= _options.MaxLength)
+         if (_options.TokenCounter(sliceEmbeddingPairs[i].Value) >= _options.MaxLength)
          {  // Reached the token count limit. Start a new chunk
             Console.WriteLine($"Frst {i} -> Reached limit");
             isInitialMerge = true;    // We`ll start a new chunk
@@ -55,7 +53,7 @@ public class TextChunker
       i = 0;
       while (i < sliceEmbeddingPairs.Count - 1)
       {
-         if (CalculateTokens(sliceEmbeddingPairs[i].Value) > _options.MaxLength)
+         if (_options.TokenCounter(sliceEmbeddingPairs[i].Value) > _options.MaxLength)
          {  // Chunk is already too big. Go to next
             Console.WriteLine($"Scnd {i} -> Reached limit");
             i++;
@@ -108,13 +106,12 @@ public class TextChunker
       return (Value: newValue, Embedding: newEmbedding);
    }
 
-   private static int CalculateTokens(string str)
-   {
-      return str.Length;
-   }
-
-   private static float CompareEmbeddings(ReadOnlySpan<float> x, ReadOnlySpan<float> y)
-   {
-      return TensorPrimitives.CosineSimilarity(x, y);
-   }
+   private float CompareEmbeddings(ReadOnlySpan<float> x, ReadOnlySpan<float> y) =>
+      _options.DistanceFunction switch
+      {
+         TextChunkerOptions.DistanceFunctions.CosineSimilarity => TensorPrimitives.CosineSimilarity(x, y),
+         TextChunkerOptions.DistanceFunctions.DotProductSimilarity => TensorPrimitives.Dot(x, y),
+         TextChunkerOptions.DistanceFunctions.EuclideanDistance => TensorPrimitives.Distance(x, y),
+         _ => throw new NotSupportedException($"The distance function '{_options.DistanceFunction}' is not supported")
+      };
 }
