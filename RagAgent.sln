@@ -5,6 +5,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RagAgent", "RagAgent\RagAgent.csproj", "{0DBEEB1E-A68C-426D-8404-0D167B1995B4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SemanticChunker", "SemanticChunker\SemanticChunker.csproj", "{2CA300EB-9A05-4749-886F-76D8D7AE90C7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{0DBEEB1E-A68C-426D-8404-0D167B1995B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0DBEEB1E-A68C-426D-8404-0D167B1995B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0DBEEB1E-A68C-426D-8404-0D167B1995B4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2CA300EB-9A05-4749-886F-76D8D7AE90C7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2CA300EB-9A05-4749-886F-76D8D7AE90C7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2CA300EB-9A05-4749-886F-76D8D7AE90C7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2CA300EB-9A05-4749-886F-76D8D7AE90C7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
