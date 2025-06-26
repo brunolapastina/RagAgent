@@ -14,11 +14,13 @@ public class ChatWorker(
    IHostApplicationLifetime _appLifetime,
    Kernel _kernel,
    IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator,
-   DataLoader _dataLoader) : BackgroundService
+   DataLoader _dataLoader,
+   TextChunker textChunker) : BackgroundService
 {
    private readonly ChatHistory _chat = [];
 
    private readonly HandlebarsPromptTemplateFactory _templateFactory = new();
+   private readonly TextChunker _textChunker = textChunker;
 
    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
    {
@@ -50,8 +52,7 @@ In the end, learning to walk is a beautiful mix of biology, practice, and love. 
          MergingThreshold = 0.6f,
          MaxLength = 1000
       };
-      var splitter = new TextChunker(_embeddingGenerator, opts);
-      var slices = await splitter.Slice(text, stoppingToken);
+      var slices = await _textChunker.Slice(text, opts, stoppingToken);
       foreach (var str in slices)
       {
          Console.WriteLine("-------------------");

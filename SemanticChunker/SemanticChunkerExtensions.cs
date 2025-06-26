@@ -5,9 +5,6 @@ namespace SemanticChunker;
 
 public static class SemanticChunkerExtensions
 {
-   public static IServiceCollection UseSemanticChunker(this IServiceCollection collection) =>
-      collection.UseSemanticChunker(new TextChunkerOptions());
-
-   public static IServiceCollection UseSemanticChunker(this IServiceCollection collection, TextChunkerOptions options) =>
-      collection.AddSingleton(service => ActivatorUtilities.CreateInstance<TextChunker>(service, options));
+   public static IServiceCollection AddSemanticChunker(this IServiceCollection collection) =>
+      collection.AddSingleton(service => ActivatorUtilities.CreateInstance<TextChunker>(service));
 }

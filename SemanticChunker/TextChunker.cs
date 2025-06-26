@@ -1,20 +1,21 @@
 ﻿using System.Numerics.Tensors;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 
 namespace SemanticChunker;
 
 public class TextChunker
 {
+   private readonly ILogger<TextChunker> _logger;
    private readonly IEmbeddingGenerator<string, Embedding<float>> _embeddingGenrator;
-   private readonly TextChunkerOptions _options;
 
-   public TextChunker(IEmbeddingGenerator<string, Embedding<float>> embeddingGenrator, TextChunkerOptions options)
+   public TextChunker(ILogger<TextChunker> logger, IEmbeddingGenerator<string, Embedding<float>> embeddingGenrator)
    {
+      _logger = logger;
       _embeddingGenrator = embeddingGenrator;
-      _options = options;
    }
 
-   public async Task<IEnumerable<string>> Slice(string text, CancellationToken cancellationToken)
+   public async Task<IEnumerable<string>> Slice(string text, TextChunkerOptions options, CancellationToken cancellationToken)
    {
       var sentenceSlicer = new SentenceSlicer();
       var slices = sentenceSlicer.Slice(text);
@@ -25,25 +26,25 @@ public class TextChunker
       bool isInitialMerge = true;
       while (i < sliceEmbeddingPairs.Count - 1)
       {
-         if (_options.TokenCounter(sliceEmbeddingPairs[i].Value) >= _options.MaxLength)
+         if (options.TokenCounter(sliceEmbeddingPairs[i].Value) >= options.MaxLength)
          {  // Reached the token count limit. Start a new chunk
-            Console.WriteLine($"Frst {i} -> Reached limit");
+            _logger.LogTrace("[First pass] Chunk {ChunkNumber} -> Reached limit", i);
             isInitialMerge = true;    // We`ll start a new chunk
             i++;
             continue;
          }
 
-         var score = CompareEmbeddings(sliceEmbeddingPairs[i].Embedding.Vector.Span, sliceEmbeddingPairs[i + 1].Embedding.Vector.Span);
-         if (CheckSemanticChunkingScore(score, isInitialMerge))
+         var score = CompareEmbeddings(sliceEmbeddingPairs[i].Embedding.Vector.Span, sliceEmbeddingPairs[i + 1].Embedding.Vector.Span, options.DistanceFunction);
+         if (CheckSemanticChunkingScore(score, isInitialMerge, options))
          {  // Shoud merge, so merge the slices and do it again, with the merged chunk and the next slice
             sliceEmbeddingPairs[i] = await MergeSlicesAndCalculateEmbedding(cancellationToken, sliceEmbeddingPairs[i].Value, sliceEmbeddingPairs[i + 1].Value);
             sliceEmbeddingPairs.RemoveAt(i + 1);
             isInitialMerge = false;    // We`ll continue appending to an existing chunk
-            Console.WriteLine($"Frst {i}:{i + 1} -> {score} -> Merged");
+            _logger.LogTrace("[First pass] Chunks {ChunkNumberBegin}:{ChunkNumberEnd} -> {Score} -> Merged", i, i + 1, score);
          }
          else
          {  // Should not merge. Advance to the next slice and do it all over again
-            Console.WriteLine($"Frst {i}:{i + 1} -> {score} -> NOT Merged");
+            _logger.LogTrace("[First pass] Chunks {ChunkNumberBegin}:{ChunkNumberEnd} -> {Score} -> NOT Merged", i, i + 1, score);
             isInitialMerge = true;     // We`ll start a new chunk
             i++;
          }
@@ -53,39 +54,39 @@ public class TextChunker
       i = 0;
       while (i < sliceEmbeddingPairs.Count - 1)
       {
-         if (_options.TokenCounter(sliceEmbeddingPairs[i].Value) > _options.MaxLength)
+         if (options.TokenCounter(sliceEmbeddingPairs[i].Value) > options.MaxLength)
          {  // Chunk is already too big. Go to next
-            Console.WriteLine($"Scnd {i} -> Reached limit");
+            _logger.LogTrace("First pass] Chunk {ChunkNumber} -> Reached limit", i);
             i++;
             continue;
          }
 
-         var score = CompareEmbeddings(sliceEmbeddingPairs[i].Embedding.Vector.Span, sliceEmbeddingPairs[i + 1].Embedding.Vector.Span);
-         if (score > _options.MergingThreshold)
+         var score = CompareEmbeddings(sliceEmbeddingPairs[i].Embedding.Vector.Span, sliceEmbeddingPairs[i + 1].Embedding.Vector.Span, options.DistanceFunction);
+         if (score > options.MergingThreshold)
          {  // Shoud merge, so merge the slices and do it again, with the merged chunk and the next slice
             sliceEmbeddingPairs[i] = await MergeSlicesAndCalculateEmbedding(cancellationToken, sliceEmbeddingPairs[i].Value, sliceEmbeddingPairs[i + 1].Value);
             sliceEmbeddingPairs.RemoveAt(i + 1);
-            Console.WriteLine($"Scnd {i}:{i + 1} -> {score} - > Merged one");
+            _logger.LogTrace("[Second pass] Chunks {ChunkNumberBegin}:{ChunkNumberEnd} -> {Score} - > Merged one", i, i + 1, score);
          }
          else if (i + 2 < sliceEmbeddingPairs.Count)
          {  // Should not merge, but there are mor slices, so check the similarity with the next slice
-            score = CompareEmbeddings(sliceEmbeddingPairs[i].Embedding.Vector.Span, sliceEmbeddingPairs[i + 2].Embedding.Vector.Span);
-            if (score > _options.MergingThreshold)
+            score = CompareEmbeddings(sliceEmbeddingPairs[i].Embedding.Vector.Span, sliceEmbeddingPairs[i + 2].Embedding.Vector.Span, options.DistanceFunction);
+            if (score > options.MergingThreshold)
             {  // Shoud merge, so merge the slices and do it again, with the merged chunk and the next slice
                sliceEmbeddingPairs[i] = await MergeSlicesAndCalculateEmbedding(cancellationToken, sliceEmbeddingPairs[i].Value, sliceEmbeddingPairs[i + 1].Value, sliceEmbeddingPairs[i + 2].Value);
                sliceEmbeddingPairs.RemoveAt(i + 1);
                sliceEmbeddingPairs.RemoveAt(i + 2);
-               Console.WriteLine($"Scnd {i}:{i + 2} -> {score} -> Merged two");
+               _logger.LogTrace("[Second pass] Chunks {ChunkNumberBegin}:{ChunkNumberEnd} -> {Score} -> Merged two", i, i + 2, score);
             }
             else
             {  // Really should not merge. So leave this chunk as it is and go to the next one
-               Console.WriteLine($"Scnd {i}:{i + 2} -> {score} -> NOT merged two");
+               _logger.LogTrace("[Second pass] Chunks {ChunkNumberBegin}:{ChunkNumberEnd} -> {Score} -> NOT merged two", i, i + 2, score);
                i++;
             }
          }
          else
          {  // Should not merge and reached the end
-            Console.WriteLine($"Scnd {i}:{i + 1} -> {score} -> NOT merged one");
+            _logger.LogTrace("[Second pass] Chunks {ChunkNumberBegin}:{ChunkNumberEnd} -> {Score} -> NOT merged one", i, i + 1, score);
             i++;
          }
       }
@@ -93,9 +94,9 @@ public class TextChunker
       return sliceEmbeddingPairs.Select(s => s.Value);
    }
 
-   private bool CheckSemanticChunkingScore(float score, bool isInitialMerge)
+   private static bool CheckSemanticChunkingScore(float score, bool isInitialMerge, TextChunkerOptions options)
    {
-      var threshold = isInitialMerge ? _options.InitialThreshold : _options.AppendingThreshold;
+      var threshold = isInitialMerge ? options.InitialThreshold : options.AppendingThreshold;
       return score > threshold;
    }
 
@@ -106,12 +107,12 @@ public class TextChunker
       return (Value: newValue, Embedding: newEmbedding);
    }
 
-   private float CompareEmbeddings(ReadOnlySpan<float> x, ReadOnlySpan<float> y) =>
-      _options.DistanceFunction switch
+   private static float CompareEmbeddings(ReadOnlySpan<float> x, ReadOnlySpan<float> y, TextChunkerOptions.DistanceFunctions distanceFunction) =>
+      distanceFunction switch
       {
          TextChunkerOptions.DistanceFunctions.CosineSimilarity => TensorPrimitives.CosineSimilarity(x, y),
          TextChunkerOptions.DistanceFunctions.DotProductSimilarity => TensorPrimitives.Dot(x, y),
          TextChunkerOptions.DistanceFunctions.EuclideanDistance => TensorPrimitives.Distance(x, y),
-         _ => throw new NotSupportedException($"The distance function '{_options.DistanceFunction}' is not supported")
+         _ => throw new NotSupportedException($"The distance function '{distanceFunction}' is not supported")
       };
 }
