@@ -1,9 +1,6 @@
-using System;
-using System.Diagnostics;
+namespace AllTheChunkers;
 
-namespace SemanticChunker;
-
-public class TextChunkerOptions
+public class SemanticDoublePassMergingChunkerOptions
 {
    /// <summary>
    /// Specifies the similarity needed for initial sentences to form a new chunk. A higher value creates more focused chunks but may result in smaller chunks.
@@ -39,18 +36,6 @@ public class TextChunkerOptions
    private static int DefaultTokenCounter(string input)
    {
       return input.Length >> 2;
-   }
-
-   public enum DistanceFunctions
-   {
-      /// <summary>Computes the cosine similarity between the two embeddings.</summary>
-      CosineSimilarity,
-
-      /// <summary>Computes the distance in Euclidean space.</summary>
-      EuclideanDistance,
-
-      /// <sumary>Computes the dot product of two embeddings</summary>
-      DotProductSimilarity,
    }
 
    public DistanceFunctions DistanceFunction { get; set; } = DistanceFunctions.CosineSimilarity;

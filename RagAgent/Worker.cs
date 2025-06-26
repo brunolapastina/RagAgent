@@ -1,9 +1,9 @@
 using System.Text;
+using AllTheChunkers;
 using Microsoft.Extensions.AI;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.PromptTemplates.Handlebars;
-using SemanticChunker;
 
 #pragma warning disable SKEXP0001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
@@ -15,12 +15,12 @@ public class ChatWorker(
    Kernel _kernel,
    IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator,
    DataLoader _dataLoader,
-   TextChunker textChunker) : BackgroundService
+   SemanticDoublePassMergingChunker textChunker) : BackgroundService
 {
    private readonly ChatHistory _chat = [];
 
    private readonly HandlebarsPromptTemplateFactory _templateFactory = new();
-   private readonly TextChunker _textChunker = textChunker;
+   private readonly SemanticDoublePassMergingChunker _textChunker = textChunker;
 
    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
    {
@@ -45,7 +45,7 @@ It’s important to remember that every baby has their own timeline. Some walk a
 
 In the end, learning to walk is a beautiful mix of biology, practice, and love. It marks the start of a lifetime of movement and independence. And once babies master walking—watch out... they’ll soon be running everywhere!
 """;
-      var opts = new TextChunkerOptions()
+      var opts = new SemanticDoublePassMergingChunkerOptions()
       {
          InitialThreshold = 0.5f,
          AppendingThreshold = 0.6f,

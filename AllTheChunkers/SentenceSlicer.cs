@@ -1,12 +1,12 @@
 using System;
 
-namespace SemanticChunker;
+namespace AllTheChunkers;
 
-public class SentenceSlicer
+public static class SentenceSlicer
 {
    private static readonly char[] EndOfSentence = ['.', '!', '?', '\n'];
 
-   public IEnumerable<string> Slice(string text)
+   public static IEnumerable<string> Slice(string text)
    {
       int i = 0;
       while (i < text.Length)

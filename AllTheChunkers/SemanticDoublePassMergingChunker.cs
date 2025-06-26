@@ -2,23 +2,22 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
-namespace SemanticChunker;
+namespace AllTheChunkers;
 
-public class TextChunker
+public class SemanticDoublePassMergingChunker
 {
-   private readonly ILogger<TextChunker> _logger;
+   private readonly ILogger<SemanticDoublePassMergingChunker> _logger;
    private readonly IEmbeddingGenerator<string, Embedding<float>> _embeddingGenrator;
 
-   public TextChunker(ILogger<TextChunker> logger, IEmbeddingGenerator<string, Embedding<float>> embeddingGenrator)
+   public SemanticDoublePassMergingChunker(ILogger<SemanticDoublePassMergingChunker> logger, IEmbeddingGenerator<string, Embedding<float>> embeddingGenrator)
    {
       _logger = logger;
       _embeddingGenrator = embeddingGenrator;
    }
 
-   public async Task<IEnumerable<string>> Slice(string text, TextChunkerOptions options, CancellationToken cancellationToken)
+   public async Task<IEnumerable<string>> Slice(string text, SemanticDoublePassMergingChunkerOptions options, CancellationToken cancellationToken)
    {
-      var sentenceSlicer = new SentenceSlicer();
-      var slices = sentenceSlicer.Slice(text);
+      var slices = SentenceSlicer.Slice(text);
       var sliceEmbeddingPairs = (await _embeddingGenrator.GenerateAndZipAsync(slices, null, cancellationToken)).ToList();
 
       //--[] First pass: classical semantic chunking ]---
@@ -94,7 +93,7 @@ public class TextChunker
       return sliceEmbeddingPairs.Select(s => s.Value);
    }
 
-   private static bool CheckSemanticChunkingScore(float score, bool isInitialMerge, TextChunkerOptions options)
+   private static bool CheckSemanticChunkingScore(float score, bool isInitialMerge, SemanticDoublePassMergingChunkerOptions options)
    {
       var threshold = isInitialMerge ? options.InitialThreshold : options.AppendingThreshold;
       return score > threshold;
@@ -107,12 +106,12 @@ public class TextChunker
       return (Value: newValue, Embedding: newEmbedding);
    }
 
-   private static float CompareEmbeddings(ReadOnlySpan<float> x, ReadOnlySpan<float> y, TextChunkerOptions.DistanceFunctions distanceFunction) =>
+   private static float CompareEmbeddings(ReadOnlySpan<float> x, ReadOnlySpan<float> y, DistanceFunctions distanceFunction) =>
       distanceFunction switch
       {
-         TextChunkerOptions.DistanceFunctions.CosineSimilarity => TensorPrimitives.CosineSimilarity(x, y),
-         TextChunkerOptions.DistanceFunctions.DotProductSimilarity => TensorPrimitives.Dot(x, y),
-         TextChunkerOptions.DistanceFunctions.EuclideanDistance => TensorPrimitives.Distance(x, y),
+         DistanceFunctions.CosineSimilarity => TensorPrimitives.CosineSimilarity(x, y),
+         DistanceFunctions.DotProductSimilarity => TensorPrimitives.Dot(x, y),
+         DistanceFunctions.EuclideanDistance => TensorPrimitives.Distance(x, y),
          _ => throw new NotSupportedException($"The distance function '{distanceFunction}' is not supported")
       };
 }

@@ -1,6 +1,6 @@
+using AllTheChunkers;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.SemanticKernel;
-using SemanticChunker;
 using Serilog;
 
 #pragma warning disable SKEXP0070, SKEXP0001, SKEXP0050 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
@@ -37,7 +37,7 @@ public class Program
          builder.Services.AddSingleton<DataLoader>();
          builder.Services.AddHostedService<ChatWorker>();
          builder.Services.AddInMemoryVectorStore();
-         builder.Services.AddSemanticChunker();
+         builder.Services.AddSemanticDoublePassMergingChunker();
          builder.Services.AddHttpClient().ConfigureHttpClientDefaults(conf =>
          {
             conf.AddStandardResilienceHandler().Configure(o =>
