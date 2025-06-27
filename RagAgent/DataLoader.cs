@@ -29,12 +29,6 @@ public class DataLoader(ILogger<DataLoader> logger, IConfiguration configuration
       var collection = _vectorStore.GetCollection<int, VectorStoreEntry>(collectionName);
       await collection.EnsureCollectionExistsAsync(cancellationToken);
 
-      var parallelOpts = new ParallelOptions
-      {
-         CancellationToken = cancellationToken,
-         MaxDegreeOfParallelism = _config.DegreeOfParallelism
-      };
-
       var opts = new SemanticDoublePassMergingChunkerOptions()
       {
          InitialThreshold = 0.7f,
@@ -50,23 +44,30 @@ public class DataLoader(ILogger<DataLoader> logger, IConfiguration configuration
          var fileContent = await LoadFile(document, cancellationToken);
          var documentChunks = await _textChunker.Slice(fileContent, opts, cancellationToken);
 
-         var entries = new ConcurrentBag<VectorStoreEntry>();
-
-         await Parallel.ForEachAsync(documentChunks, parallelOpts, async (chunk, cs) =>
+         if (_logger.IsEnabled(LogLevel.Trace))
          {
-            var vse = new VectorStoreEntry
+            foreach (var chk in documentChunks)
+            {
+               _logger.LogTrace("[Chunk {ChunkIndex}] [Length {TokenCount}] {ChunkContent}", chk.Index, chk.TokenCount, chk.Content);
+            }
+         }
+
+         var entries = documentChunks
+            .AsParallel()
+            .WithCancellation(cancellationToken)
+            .WithDegreeOfParallelism(_config.DegreeOfParallelism)
+            .Select(async (chunk) => new VectorStoreEntry
             {
                Key = chunk.Index,
                Content = chunk.Content,
-               Embedding = chunk.Embedding ?? (await _embeddingGenerator.GenerateAsync(chunk.Content, null, cs)).Vector
-            };
-            entries.Add(vse);
-         });
+               Embedding = chunk.Embedding ?? (await _embeddingGenerator.GenerateAsync(chunk.Content, null, cancellationToken)).Vector
+            })
+            .Select(it => it.Result);
 
          await collection.UpsertAsync(entries, cancellationToken);
          sw.Stop();
 
-         _logger.LogInformation("Loaded {ChunkCount} chunks from {Document} in {Time}", entries.Count, document, sw.Elapsed);
+         _logger.LogInformation("Loaded {ChunkCount} chunks from {Document} in {Time}", entries.Count(), document, sw.Elapsed);
       }
 
       _logger.LogInformation("Data loading completed.");
