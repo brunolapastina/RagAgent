@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
+using AllTheChunkers;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.VectorData;
 using SemanticSlicer;
@@ -11,11 +12,12 @@ using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
 
 namespace RagAgent;
 
-public class DataLoader(ILogger<DataLoader> logger, IConfiguration configuration, VectorStore vectorStore, IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator)
+public class DataLoader(ILogger<DataLoader> logger, IConfiguration configuration, VectorStore vectorStore, IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator, SemanticDoublePassMergingChunker textChunker)
 {
    private readonly ILogger<DataLoader> _logger = logger;
    private readonly VectorStore _vectorStore = vectorStore;
    private readonly IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator = embeddingGenerator;
+   private readonly SemanticDoublePassMergingChunker _textChunker = textChunker;
    private readonly DataLoaderConfig _config = configuration.GetSection("DataLoader").Get<DataLoaderConfig>()
       ?? throw new InvalidOperationException("DataLoader configuration is missing.");
 
@@ -33,29 +35,30 @@ public class DataLoader(ILogger<DataLoader> logger, IConfiguration configuration
          MaxDegreeOfParallelism = _config.DegreeOfParallelism
       };
 
-      var slicer = new Slicer( new SlicerOptions
+      var opts = new SemanticDoublePassMergingChunkerOptions()
       {
-         MaxChunkTokenCount = _config.MaxTokensPerChunk,
-         Separators = Separators.Text,
-         Encoding = SemanticSlicer.Encoding.Cl100K
-      });
+         InitialThreshold = 0.7f,
+         AppendingThreshold = 0.8f,
+         MergingThreshold = 0.64f,
+         MaxLength = _config.MaxTokensPerChunk
+      };
 
       foreach (var document in _config.Documents)
       {
          var sw = Stopwatch.StartNew();
 
          var fileContent = await LoadFile(document, cancellationToken);
-         var documentChunks = slicer.GetDocumentChunks(fileContent);
+         var documentChunks = await _textChunker.Slice(fileContent, opts, cancellationToken);
 
          var entries = new ConcurrentBag<VectorStoreEntry>();
-   
+
          await Parallel.ForEachAsync(documentChunks, parallelOpts, async (chunk, cs) =>
          {
             var vse = new VectorStoreEntry
             {
                Key = chunk.Index,
                Content = chunk.Content,
-               Embedding = (await _embeddingGenerator.GenerateAsync(chunk.Content, null, cs)).Vector
+               Embedding = chunk.Embedding ?? (await _embeddingGenerator.GenerateAsync(chunk.Content, null, cs)).Vector
             };
             entries.Add(vse);
          });
@@ -63,7 +66,7 @@ public class DataLoader(ILogger<DataLoader> logger, IConfiguration configuration
          await collection.UpsertAsync(entries, cancellationToken);
          sw.Stop();
 
-         _logger.LogInformation("Loaded {Count} entries from {Document} in {Time}", entries.Count, document, sw.Elapsed);
+         _logger.LogInformation("Loaded {ChunkCount} chunks from {Document} in {Time}", entries.Count, document, sw.Elapsed);
       }
 
       _logger.LogInformation("Data loading completed.");

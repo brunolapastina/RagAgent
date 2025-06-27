@@ -15,12 +15,30 @@ public class SemanticDoublePassMergingChunker
       _embeddingGenrator = embeddingGenrator;
    }
 
-   public async Task<IEnumerable<string>> Slice(string text, SemanticDoublePassMergingChunkerOptions options, CancellationToken cancellationToken)
+   public async Task<IEnumerable<DocumentChunk>> Slice(string text, SemanticDoublePassMergingChunkerOptions options, CancellationToken cancellationToken)
    {
       var slices = SentenceSlicer.Slice(text);
       var sliceEmbeddingPairs = (await _embeddingGenrator.GenerateAndZipAsync(slices, null, cancellationToken)).ToList();
 
       //--[] First pass: classical semantic chunking ]---
+      await RunFirstPass(options, sliceEmbeddingPairs, cancellationToken);
+
+      //---[ Second Pass: a semantic merging ]---
+      await RunSecondPass(options, sliceEmbeddingPairs, cancellationToken);
+
+      return sliceEmbeddingPairs.Select( (s, i) => new DocumentChunk()
+      {
+         Index = i,
+         Content = s.Value,
+         TokenCount = options.TokenCounter(s.Value),
+         Embedding = s.Embedding.Vector
+      });
+   }
+
+   private async Task RunFirstPass(SemanticDoublePassMergingChunkerOptions options, List<(string Value, Embedding<float> Embedding)> sliceEmbeddingPairs, CancellationToken cancellationToken)
+   {
+      _logger.LogTrace("[Firdt pass] Starting with {NumOfChunks}", sliceEmbeddingPairs.Count);
+
       int i = 0;
       bool isInitialMerge = true;
       while (i < sliceEmbeddingPairs.Count - 1)
@@ -48,14 +66,18 @@ public class SemanticDoublePassMergingChunker
             i++;
          }
       }
+   }
 
-      //---[ Second Pass: a semantic merging ]---
-      i = 0;
+   private async Task RunSecondPass(SemanticDoublePassMergingChunkerOptions options, List<(string Value, Embedding<float> Embedding)> sliceEmbeddingPairs, CancellationToken cancellationToken)
+   {
+      _logger.LogTrace("[Second pass] Starting with {NumOfChunks}", sliceEmbeddingPairs.Count);
+
+      int i = 0;
       while (i < sliceEmbeddingPairs.Count - 1)
       {
          if (options.TokenCounter(sliceEmbeddingPairs[i].Value) > options.MaxLength)
          {  // Chunk is already too big. Go to next
-            _logger.LogTrace("First pass] Chunk {ChunkNumber} -> Reached limit", i);
+            _logger.LogTrace("Second pass] Chunk {ChunkNumber} -> Reached limit", i);
             i++;
             continue;
          }
@@ -69,12 +91,14 @@ public class SemanticDoublePassMergingChunker
          }
          else if (i + 2 < sliceEmbeddingPairs.Count)
          {  // Should not merge, but there are mor slices, so check the similarity with the next slice
+            _logger.LogTrace("[Second pass] Chunks {ChunkNumberBegin}:{ChunkNumberEnd} -> {Score} -> NOT merged one", i, i + 1, score);
+
             score = CompareEmbeddings(sliceEmbeddingPairs[i].Embedding.Vector.Span, sliceEmbeddingPairs[i + 2].Embedding.Vector.Span, options.DistanceFunction);
             if (score > options.MergingThreshold)
             {  // Shoud merge, so merge the slices and do it again, with the merged chunk and the next slice
                sliceEmbeddingPairs[i] = await MergeSlicesAndCalculateEmbedding(cancellationToken, sliceEmbeddingPairs[i].Value, sliceEmbeddingPairs[i + 1].Value, sliceEmbeddingPairs[i + 2].Value);
+               sliceEmbeddingPairs.RemoveAt(i + 2);   // If I remove the first chunk first, the second one will change its index
                sliceEmbeddingPairs.RemoveAt(i + 1);
-               sliceEmbeddingPairs.RemoveAt(i + 2);
                _logger.LogTrace("[Second pass] Chunks {ChunkNumberBegin}:{ChunkNumberEnd} -> {Score} -> Merged two", i, i + 2, score);
             }
             else
@@ -89,8 +113,6 @@ public class SemanticDoublePassMergingChunker
             i++;
          }
       }
-
-      return sliceEmbeddingPairs.Select(s => s.Value);
    }
 
    private static bool CheckSemanticChunkingScore(float score, bool isInitialMerge, SemanticDoublePassMergingChunkerOptions options)
